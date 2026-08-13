@@ -1,0 +1,121 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    id 'org.springframework.boot' version '3.5.16'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.tuum'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.AMAZON
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    mybatisVersion = '3.0.5'
+    springdocVersion = '2.8.13'
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+
+    implementation "org.mybatis.spring.boot:mybatis-spring-boot-starter:${mybatisVersion}"
+
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.amqp:spring-rabbit-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:rabbitmq'
+    testImplementation 'org.awaitility:awaitility'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        // Throughput measurement is opt-in: ./gradlew perfTest
+        excludeTags 'perf'
+    }
+    // Testcontainers needs a moment on a small Docker VM.
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.register('perfTest', Test) {
+    description = 'Runs the throughput measurement (requires Docker).'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'perf'
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+    outputs.upToDateWhen { false }
+}
+
+jacoco {
+    toolVersion = '0.8.14'
+}
+
+// Generated DTO/config/bootstrap classes carry no branching logic worth gating on.
+def coverageExclusions = [
+        '**/CoreBankingApplication.class',
+        '**/config/**',
+        '**/model/dto/**',
+        '**/messaging/event/**',
+]
+
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    reports {
+        xml.required = true
+        html.required = true
+    }
+    classDirectories.setFrom(
+            files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: coverageExclusions)
+            })
+    )
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    dependsOn tasks.named('jacocoTestReport')
+    classDirectories.setFrom(
+            files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: coverageExclusions)
+            })
+    )
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestCoverageVerification')
+}
