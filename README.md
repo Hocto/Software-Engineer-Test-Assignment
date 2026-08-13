@@ -13,7 +13,7 @@ Built for the Tuum Software Engineer Test Assignment.
 | **Persistence** | MyBatis 3.0.5 + PostgreSQL 16, schema via Flyway |
 | **Messaging** | RabbitMQ 3.13 (topic exchange) |
 | **Build** | Gradle 9.7 (wrapper committed) |
-| **Tests** | JUnit 5, Mockito, Testcontainers — **92.7% line coverage**, 45 tests |
+| **Tests** | JUnit 5, Mockito, Testcontainers — **93.5% line coverage**, 52 tests |
 
 ---
 
@@ -45,6 +45,14 @@ Postgres (5432) and the AMQP port (5672) are deliberately **not** published to t
 The app reaches them over the compose network, and binding them is the most common way a
 stack like this fails on someone else's machine. (It happened during development here: an
 unrelated container already held 5432.)
+
+**If you ran an earlier build of this branch**, wipe the volume first — `V1__init.sql` was
+revised (money moved to `NUMERIC(19,2)`) and Flyway will refuse to validate a database that
+applied the previous version:
+
+```bash
+docker compose down -v
+```
 
 ### Building and testing locally
 
@@ -85,11 +93,13 @@ Creates the account and one zero balance per currency, atomically.
 {
   "accountId": 1, "customerId": 501, "country": "EE",
   "balances": [
-    { "availableAmount": 0.0, "currency": "EUR" },
-    { "availableAmount": 0.0, "currency": "USD" }
+    { "availableAmount": 0.00, "currency": "EUR" },
+    { "availableAmount": 0.00, "currency": "USD" }
   ]
 }
 ```
+
+`country` is trimmed; a whitespace-only value is rejected with 400.
 
 Repeated currencies are collapsed rather than rejected — the request's intent is a *set*,
 and the outcome (one balance per named currency) is the same either way.
@@ -111,7 +121,9 @@ Returns the account with its current balances.
 }
 ```
 
-`IN` credits the balance, `OUT` debits it.
+`IN` credits the balance, `OUT` debits it. Amounts are normalised to two decimals on the
+way in, so `40` comes back as `40.00` and the same transaction reads identically from
+`POST` and `GET`. More than two decimals is rejected with 400 rather than rounded.
 
 ### `GET /accounts/{accountId}/transactions` → 200
 
@@ -139,14 +151,26 @@ machine-readable identifier — branch on it rather than on status or message te
 |---|---|---|
 | Currency outside EUR/SEK/GBP/USD | 400 | `INVALID_CURRENCY` |
 | Direction outside IN/OUT | 400 | `INVALID_DIRECTION` |
-| Amount ≤ 0, blank description, missing field, >4 decimal places | 400 | `VALIDATION_ERROR` |
+| Amount ≤ 0, blank description or country, missing field, >2 decimal places | 400 | `VALIDATION_ERROR` |
 | Unparseable JSON body | 400 | `MALFORMED_REQUEST` |
+| Unsupported HTTP method for the path | 405 | `METHOD_NOT_ALLOWED` |
+| `Content-Type` the endpoint cannot consume | 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| No representation matching `Accept` | 406 | `NOT_ACCEPTABLE` |
+| Unknown path | 404 | `NOT_FOUND` |
 | Account does not exist | 404 | `ACCOUNT_NOT_FOUND` |
 | Account exists but holds no balance in that currency | 400 | `BALANCE_NOT_FOUND` |
 | OUT exceeds available funds | **422** | `INSUFFICIENT_FUNDS` |
 | Anything unhandled | 500 | `INTERNAL_ERROR` |
 
-Two of these deserve their reasoning:
+`GlobalExceptionHandler` extends Spring's `ResponseEntityExceptionHandler` rather than
+standing alone. That detail is load-bearing: `@ExceptionHandler` methods are resolved before
+`DefaultHandlerExceptionResolver` runs, so a lone `@ExceptionHandler(Exception.class)` will
+intercept Spring's own MVC exceptions and answer 500 where 405, 415 or 404 is correct.
+Extending the base class brings in its per-exception handlers, which are more specific
+matches and therefore win; `handleExceptionInternal` is overridden as the single point that
+renders every one of them into the shape above. `ErrorHandlingIT` pins this.
+
+Two status choices deserve their reasoning:
 
 **Insufficient funds is 422, not 400.** The request is syntactically valid and the account
 exists — a business rule blocks it. That separation lets a client distinguish "fix your
@@ -229,12 +253,25 @@ service the trade is right, because the database is the system of record and the
 stream is a notification. A publish failure is logged loudly rather than rethrown — failing
 the HTTP response for work that already committed would be strictly worse.
 
-### Money is `NUMERIC(19,4)` and `BigDecimal`, never floating point
+### Money is `NUMERIC(19,2)` and `BigDecimal`, never floating point
 
 Binary floating point cannot represent decimal fractions exactly. `double` is disqualified
-for balances. Requests with more than 4 decimal places are rejected explicitly rather than
-silently rounded by the database, so a caller is never quietly given a different amount than
-it asked for.
+for balances.
+
+Scale 2 is the ISO-4217 minor unit of every supported currency — EUR, SEK, GBP and USD all
+subdivide into hundredths — so it is the precision the domain actually has, not a
+simplification. Requests carrying more than two decimals are rejected with 400 rather than
+rounded, so a caller is never quietly charged a different amount than it asked for.
+
+`com.tuum.banking.model.Money` holds that scale in one place and normalises on the way in.
+Without normalisation the same transaction serialises two ways — `POST` echoing the caller's
+scale (`250.75`) while `GET` returns the column's — which is a contract bug that only shows
+up in raw bytes, not in a deserialised `BigDecimal`. `TransactionApiIT` asserts on the raw
+response string for exactly that reason.
+
+The constraint this accepts: admitting a currency with a different minor unit — JPY at 0,
+KWD at 3 — would need a schema migration and a per-currency scale lookup, not just a wider
+column. For a fixed four-currency service that is the right trade.
 
 A `CHECK (available_amount >= 0)` constraint sits behind the application's funds check as a
 database-level backstop.
@@ -432,8 +469,26 @@ actually verified rather than assumed:
   against an unrelated container on the dev machine. This drove the decision not to publish
   infrastructure ports at all.
 
+**Defects found by a later self-review, after the first version was already "done"** — worth
+listing separately, because a passing suite at 92.7% coverage reported none of them:
+
+- `GlobalExceptionHandler` answered **500** for `405`, `415` and `404`. A standalone
+  `@ExceptionHandler(Exception.class)` was intercepting Spring's own MVC exceptions before
+  `DefaultHandlerExceptionResolver` could map them. No test covered protocol-level failures,
+  so nothing caught it. Fixed by extending `ResponseEntityExceptionHandler`; `ErrorHandlingIT`
+  now pins all four cases.
+- The same transaction serialised two ways: `POST` returned `amount: 250.75`, `GET` returned
+  `250.7500`. Fixed by normalising through `Money`, and money moved to scale 2 to match the
+  ISO-4217 minor unit of the supported currencies.
+- The README documented payloads the service never emitted (`0.0` where it produced `0.0000`).
+  Cause: the original examples were captured through `python3 -m json.tool`, which reparsed
+  the decimals as floats and reprinted them normalised. Every example here is now pasted from
+  raw `curl` bytes.
+- `country` accepted a whitespace-only value, because `@Size(min = 1)` counts characters.
+  Now `@NotBlank` plus trimming in the record's compact constructor.
+
 **Verification is all first-hand.** Every number here was measured on this machine, not
 estimated: the coverage figures come from the Jacoco XML report, the throughput figures from
 two `perfTest` runs, and the API behaviour from `curl` against the running compose stack —
 including a 50-way parallel burst confirming exactly 10 of 50 withdrawals succeeded against a
-100.00 balance, leaving exactly `0.0000`.
+100.00 balance, leaving exactly `0.00`.
