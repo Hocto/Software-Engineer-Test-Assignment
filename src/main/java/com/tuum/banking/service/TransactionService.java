@@ -1,7 +1,7 @@
 package com.tuum.banking.service;
 
 import com.tuum.banking.exception.AccountNotFoundException;
-import com.tuum.banking.exception.BalanceNotFoundException;
+import com.tuum.banking.exception.CurrencyNotHeldException;
 import com.tuum.banking.exception.InsufficientFundsException;
 import com.tuum.banking.messaging.EventPublisher;
 import com.tuum.banking.messaging.event.BalanceUpdatedEvent;
@@ -52,7 +52,7 @@ public class TransactionService {
      */
     @Transactional
     public TransactionResponse createTransaction(Long accountId, CreateTransactionRequest request) {
-        // 1. Distinguish "no such account" (404) from "account holds no such currency" (400).
+        // 1. Distinguish "no such account" (404) from "account holds no such currency" (422).
         if (!accountMapper.existsById(accountId)) {
             throw new AccountNotFoundException(accountId);
         }
@@ -60,7 +60,7 @@ public class TransactionService {
         // 2. Serialize concurrent writers on this exact balance row.
         Balance balance = balanceMapper.findByAccountIdAndCurrencyForUpdate(accountId, request.currency());
         if (balance == null) {
-            throw new BalanceNotFoundException(accountId, request.currency());
+            throw new CurrencyNotHeldException(accountId, request.currency());
         }
 
         // Normalize once, then use the same value for the arithmetic, the persisted row and

@@ -1,7 +1,7 @@
 package com.tuum.banking.service;
 
 import com.tuum.banking.exception.AccountNotFoundException;
-import com.tuum.banking.exception.BalanceNotFoundException;
+import com.tuum.banking.exception.CurrencyNotHeldException;
 import com.tuum.banking.exception.InsufficientFundsException;
 import com.tuum.banking.messaging.EventPublisher;
 import com.tuum.banking.messaging.event.BalanceUpdatedEvent;
@@ -83,12 +83,12 @@ class TransactionServiceTest {
     void inboundIncreasesBalance() {
         lockedBalance("100.00");
 
-        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("25.5000", Direction.IN));
+        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("25.50", Direction.IN));
 
         assertThat(response.balanceAfter()).isEqualByComparingTo("125.50");
         assertThat(response.transactionId()).isEqualTo(500L);
         assertThat(response.direction()).isEqualTo(Direction.IN);
-        verify(balanceMapper).updateAmount(eq(10L), argThatEquals("125.5000"));
+        verify(balanceMapper).updateAmount(eq(10L), argThatEquals("125.50"));
     }
 
     @Test
@@ -144,7 +144,7 @@ class TransactionServiceTest {
         when(balanceMapper.findByAccountIdAndCurrencyForUpdate(ACCOUNT_ID, Currency.EUR)).thenReturn(null);
 
         assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.00", Direction.IN)))
-                .isInstanceOf(BalanceNotFoundException.class)
+                .isInstanceOf(CurrencyNotHeldException.class)
                 .hasMessageContaining("EUR");
 
         verify(transactionMapper, never()).insert(any());

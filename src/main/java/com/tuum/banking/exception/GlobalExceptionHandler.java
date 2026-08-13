@@ -145,12 +145,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             Class<?> target = ife.getTargetType();
 
             if (Currency.class.equals(target)) {
-                return badRequest(ErrorCode.INVALID_CURRENCY,
-                        enumMessage("currency", ife.getValue(), Currency.values()), path);
+                // "Unsupported", not "invalid": this is the service-wide case. A currency the
+                // service supports but the account does not hold is CURRENCY_NOT_HELD (422).
+                return badRequest(ErrorCode.UNSUPPORTED_CURRENCY,
+                        enumMessage("Unsupported", "currency", ife.getValue(), Currency.values()), path);
             }
             if (Direction.class.equals(target)) {
                 return badRequest(ErrorCode.INVALID_DIRECTION,
-                        enumMessage("direction", ife.getValue(), Direction.values()), path);
+                        enumMessage("Invalid", "direction", ife.getValue(), Direction.values()), path);
             }
             return badRequest(ErrorCode.MALFORMED_REQUEST,
                     "Invalid value '%s' for field of type %s".formatted(ife.getValue(), target.getSimpleName()), path);
@@ -186,8 +188,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 : request.getDescription(false);
     }
 
-    private static String enumMessage(String field, Object rejected, Enum<?>[] allowed) {
-        return "Invalid %s '%s'. Allowed values: %s".formatted(field, rejected,
+    /**
+     * The adjective is a parameter so the message matches the {@link ErrorCode} it ships with —
+     * a body reading "Invalid currency" beside a code of {@code UNSUPPORTED_CURRENCY} would
+     * undercut the distinction the two currency codes exist to draw.
+     */
+    private static String enumMessage(String adjective, String field, Object rejected, Enum<?>[] allowed) {
+        return "%s %s '%s'. Allowed values: %s".formatted(adjective, field, rejected,
                 Arrays.stream(allowed).map(Enum::name).collect(Collectors.joining(", ")));
     }
 }

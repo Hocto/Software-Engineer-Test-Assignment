@@ -10,7 +10,16 @@ public enum ErrorCode {
 
     // Request-level failures
     VALIDATION_ERROR,
-    INVALID_CURRENCY,
+    /**
+     * The currency is not one this service supports at all. Absolute, and independent of
+     * any account — retrying the same request can never succeed.
+     *
+     * <p>Named "unsupported" rather than "invalid" because the assignment's single
+     * "Invalid currency" error covers two distinct situations; see {@link #CURRENCY_NOT_HELD}.
+     * Reusing the specification's exact term for one of them would misdirect anyone mapping
+     * requirements to code.
+     */
+    UNSUPPORTED_CURRENCY,
     INVALID_DIRECTION,
     MALFORMED_REQUEST,
 
@@ -22,7 +31,12 @@ public enum ErrorCode {
 
     // Domain failures
     ACCOUNT_NOT_FOUND,
-    BALANCE_NOT_FOUND,
+    /**
+     * The currency is supported by the service, but this account holds no balance in it.
+     * Contextual rather than absolute: the same request could succeed once the account
+     * gains that balance, so a client may retry after remediating.
+     */
+    CURRENCY_NOT_HELD,
     INSUFFICIENT_FUNDS,
 
     INTERNAL_ERROR

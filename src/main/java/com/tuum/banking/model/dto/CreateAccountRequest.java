@@ -13,7 +13,7 @@ import java.util.List;
  * Body of {@code POST /accounts}.
  *
  * <p>An unknown value in {@code currencies} fails during JSON binding, which
- * {@code GlobalExceptionHandler} translates into a 400 {@code INVALID_CURRENCY}.
+ * {@code GlobalExceptionHandler} translates into a 400 {@code UNSUPPORTED_CURRENCY}.
  */
 public record CreateAccountRequest(
 

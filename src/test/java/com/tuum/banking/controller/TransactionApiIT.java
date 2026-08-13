@@ -120,19 +120,44 @@ class TransactionApiIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("a currency the account does not hold returns 400 BALANCE_NOT_FOUND")
-    void unheldCurrencyReturns400() {
+    @DisplayName("a supported currency the account does not hold returns 422 CURRENCY_NOT_HELD")
+    void unheldCurrencyReturns422() {
         AccountResponse account = createAccount(Currency.EUR);
 
+        // SEK is a supported currency; this account simply has no SEK balance. That is an
+        // account-state problem, not a malformed request — hence 422, matching how
+        // INSUFFICIENT_FUNDS is treated, rather than the 400 an unsupported currency gets.
         ResponseEntity<JsonNode> response = post(account.accountId(), "10.00", Currency.SEK, Direction.IN, "deposit");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code").asText()).isEqualTo("BALANCE_NOT_FOUND");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().get("code").asText()).isEqualTo("CURRENCY_NOT_HELD");
         assertThat(response.getBody().get("message").asText()).contains("SEK");
     }
 
     @Test
-    @DisplayName("an unsupported currency returns 400 INVALID_CURRENCY")
+    @DisplayName("unsupported and unheld currencies are told apart by both status and code")
+    void currencyFailuresAreDistinguishable() {
+        AccountResponse account = createAccount(Currency.EUR);
+
+        // The whole point of splitting these: a client must be able to tell "fix your request,
+        // this can never work" from "valid request, open a SEK balance and retry".
+        ResponseEntity<JsonNode> unsupported = restTemplate.exchange(
+                RequestEntity.post(URI.create(transactionsUrl(account.accountId())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"amount": 10.00, "currency": "JPY", "direction": "IN", "description": "d"}"""),
+                JsonNode.class);
+
+        ResponseEntity<JsonNode> unheld = post(account.accountId(), "10.00", Currency.SEK, Direction.IN, "d");
+
+        assertThat(unsupported.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(unheld.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(unsupported.getBody().get("code").asText())
+                .isNotEqualTo(unheld.getBody().get("code").asText());
+    }
+
+    @Test
+    @DisplayName("an unsupported currency returns 400 UNSUPPORTED_CURRENCY")
     void invalidCurrencyReturns400() {
         AccountResponse account = createAccount(Currency.EUR);
 
@@ -144,7 +169,7 @@ class TransactionApiIT extends AbstractIntegrationTest {
                 JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("code").asText()).isEqualTo("INVALID_CURRENCY");
+        assertThat(response.getBody().get("code").asText()).isEqualTo("UNSUPPORTED_CURRENCY");
     }
 
     @Test

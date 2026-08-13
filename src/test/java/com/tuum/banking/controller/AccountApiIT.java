@@ -65,7 +65,7 @@ class AccountApiIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /accounts rejects an unsupported currency with 400 INVALID_CURRENCY")
+    @DisplayName("POST /accounts rejects an unsupported currency with 400 UNSUPPORTED_CURRENCY")
     void rejectsInvalidCurrency() {
         ResponseEntity<JsonNode> response = restTemplate.exchange(
                 RequestEntity.post(URI.create("/accounts"))
@@ -77,7 +77,7 @@ class AccountApiIT extends AbstractIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         JsonNode body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.get("code").asText()).isEqualTo("INVALID_CURRENCY");
+        assertThat(body.get("code").asText()).isEqualTo("UNSUPPORTED_CURRENCY");
         assertThat(body.get("message").asText()).contains("JPY").contains("EUR, SEK, GBP, USD");
         assertThat(body.get("path").asText()).isEqualTo("/accounts");
         assertThat(body.get("status").asInt()).isEqualTo(400);

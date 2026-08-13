@@ -137,8 +137,8 @@ Every failure — including 500s — returns the same shape:
 {
   "timestamp": "2026-08-13T17:55:20.297Z",
   "status": 400,
-  "code": "INVALID_CURRENCY",
-  "message": "Invalid currency 'JPY'. Allowed values: EUR, SEK, GBP, USD",
+  "code": "UNSUPPORTED_CURRENCY",
+  "message": "Unsupported currency 'JPY'. Allowed values: EUR, SEK, GBP, USD",
   "path": "/accounts",
   "fieldErrors": [ { "field": "amount", "message": "amount must be greater than zero" } ]
 }
@@ -149,7 +149,7 @@ machine-readable identifier — branch on it rather than on status or message te
 
 | Condition | Status | `code` |
 |---|---|---|
-| Currency outside EUR/SEK/GBP/USD | 400 | `INVALID_CURRENCY` |
+| Currency outside EUR/SEK/GBP/USD | 400 | `UNSUPPORTED_CURRENCY` |
 | Direction outside IN/OUT | 400 | `INVALID_DIRECTION` |
 | Amount ≤ 0, blank description or country, missing field, >2 decimal places | 400 | `VALIDATION_ERROR` |
 | Unparseable JSON body | 400 | `MALFORMED_REQUEST` |
@@ -158,9 +158,30 @@ machine-readable identifier — branch on it rather than on status or message te
 | No representation matching `Accept` | 406 | `NOT_ACCEPTABLE` |
 | Unknown path | 404 | `NOT_FOUND` |
 | Account does not exist | 404 | `ACCOUNT_NOT_FOUND` |
-| Account exists but holds no balance in that currency | 400 | `BALANCE_NOT_FOUND` |
+| Account exists but holds no balance in that currency | **422** | `CURRENCY_NOT_HELD` |
 | OUT exceeds available funds | **422** | `INSUFFICIENT_FUNDS` |
 | Anything unhandled | 500 | `INTERNAL_ERROR` |
+
+The statuses follow one rule, which is worth stating because it decides the ambiguous cases:
+
+> **400** — the request itself is wrong · **404** — the addressed resource does not exist ·
+> **422** — the request is fine, the account's state forbids it
+
+**The assignment's single "Invalid currency" error maps to two codes here**, because the two
+situations behind it demand different things of the caller:
+
+| | `UNSUPPORTED_CURRENCY` (400) | `CURRENCY_NOT_HELD` (422) |
+|---|---|---|
+| Example | `JPY` — the service supports no such currency | `SEK` on an EUR-only account |
+| Nature | Absolute, service-wide | Contextual, per-account |
+| Retrying the same request | Can never succeed | May succeed once a balance exists |
+| What it signals | A broken client integration | A customer wanting a currency they have not opened |
+
+Neither code is named `INVALID_CURRENCY`, deliberately. Attaching the specification's exact
+term to just one of these two would misdirect anyone tracing requirements to code — the
+reader would find the familiar name and conclude it covered the case they had in mind.
+`INVALID_DIRECTION` keeps its literal wording because direction has only one failure mode,
+so no such ambiguity arises.
 
 `GlobalExceptionHandler` extends Spring's `ResponseEntityExceptionHandler` rather than
 standing alone. That detail is load-bearing: `@ExceptionHandler` methods are resolved before
@@ -170,16 +191,15 @@ Extending the base class brings in its per-exception handlers, which are more sp
 matches and therefore win; `handleExceptionInternal` is overridden as the single point that
 renders every one of them into the shape above. `ErrorHandlingIT` pins this.
 
-Two status choices deserve their reasoning:
-
 **Insufficient funds is 422, not 400.** The request is syntactically valid and the account
 exists — a business rule blocks it. That separation lets a client distinguish "fix your
 request" from "the request was fine, the account state does not permit it", which are
 different things to a caller and often different code paths.
 
-**An unheld currency is 400, not 404.** The resource named by the URL (`/accounts/{id}`)
-does exist. It is the *body* that names a currency this account cannot transact in, so the
-fault is with the request payload.
+`CURRENCY_NOT_HELD` is 422 for exactly the same reason, and it started out as a 400. The
+earlier reasoning — *the URL's resource exists, so the fault is in the body* — was self
+consistent but produced an incoherent result: two failures that are both "valid request,
+account state forbids it" answered with different statuses. The rule above resolves it.
 
 ---
 
