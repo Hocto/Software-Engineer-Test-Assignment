@@ -7,12 +7,23 @@ package com.tuum.banking.exception;
  * human-readable messages, which are free to change.
  */
 public enum ErrorCode {
+
+    // Request-level failures
     VALIDATION_ERROR,
     INVALID_CURRENCY,
     INVALID_DIRECTION,
     MALFORMED_REQUEST,
+
+    // Protocol-level failures, raised by Spring MVC before a controller is reached
+    METHOD_NOT_ALLOWED,
+    UNSUPPORTED_MEDIA_TYPE,
+    NOT_ACCEPTABLE,
+    NOT_FOUND,
+
+    // Domain failures
     ACCOUNT_NOT_FOUND,
     BALANCE_NOT_FOUND,
     INSUFFICIENT_FUNDS,
+
     INTERNAL_ERROR
 }
