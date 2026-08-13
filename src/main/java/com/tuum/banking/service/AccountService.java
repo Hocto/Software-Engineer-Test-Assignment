@@ -1,7 +1,7 @@
 package com.tuum.banking.service;
 
 import com.tuum.banking.exception.AccountNotFoundException;
-import com.tuum.banking.messaging.EventPublisher;
+import com.tuum.banking.messaging.DomainEventPublisher;
 import com.tuum.banking.messaging.event.AccountCreatedEvent;
 import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.model.dto.AccountResponse;
@@ -25,9 +25,10 @@ public class AccountService {
 
     private final AccountMapper accountMapper;
     private final BalanceMapper balanceMapper;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher;
 
-    public AccountService(AccountMapper accountMapper, BalanceMapper balanceMapper, EventPublisher eventPublisher) {
+    public AccountService(AccountMapper accountMapper, BalanceMapper balanceMapper,
+                          DomainEventPublisher eventPublisher) {
         this.accountMapper = accountMapper;
         this.balanceMapper = balanceMapper;
         this.eventPublisher = eventPublisher;

@@ -3,7 +3,7 @@ package com.tuum.banking.service;
 import com.tuum.banking.exception.AccountNotFoundException;
 import com.tuum.banking.exception.CurrencyNotHeldException;
 import com.tuum.banking.exception.InsufficientFundsException;
-import com.tuum.banking.messaging.EventPublisher;
+import com.tuum.banking.messaging.DomainEventPublisher;
 import com.tuum.banking.messaging.event.BalanceUpdatedEvent;
 import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.messaging.event.TransactionCreatedEvent;
@@ -28,10 +28,10 @@ public class TransactionService {
     private final AccountMapper accountMapper;
     private final BalanceMapper balanceMapper;
     private final TransactionMapper transactionMapper;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher;
 
     public TransactionService(AccountMapper accountMapper, BalanceMapper balanceMapper,
-                              TransactionMapper transactionMapper, EventPublisher eventPublisher) {
+                              TransactionMapper transactionMapper, DomainEventPublisher eventPublisher) {
         this.accountMapper = accountMapper;
         this.balanceMapper = balanceMapper;
         this.transactionMapper = transactionMapper;

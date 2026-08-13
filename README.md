@@ -262,6 +262,23 @@ it fails if the `FOR UPDATE` is removed.
 Domain events are raised via `ApplicationEventPublisher` and relayed to RabbitMQ from a
 `@TransactionalEventListener(phase = AFTER_COMMIT)`.
 
+Publishing is split across two classes on either side of an interface, because they change
+for different reasons:
+
+| | Knows about | Changes when |
+|---|---|---|
+| `DomainEventPublisher` (interface) | events, transactions | the domain gains a new event |
+| `AfterCommitEventPublisher` | Spring's event machinery | delivery timing changes |
+| `RabbitEventRelay` | exchanges, routing keys, `RabbitTemplate` | the transport changes |
+
+Services depend only on the interface, so swapping RabbitMQ for Kafka or the outbox described
+below rewrites `RabbitEventRelay` and touches no business logic. This is the one abstraction
+in the codebase written for a *documented* second implementation rather than a hypothetical
+one — the outbox is named as required future work, not merely imagined.
+
+Adding a second destination — an audit log, a metrics sink — is a new
+`@TransactionalEventListener`, with no edit to any existing class.
+
 Publishing inline with the write would emit events for work that later rolls back — an OUT
 rejected for insufficient funds, or any failure before commit — and a consumer cannot un-see
 a message.
@@ -418,7 +435,8 @@ src/main/java/com/tuum/banking/
 │   ├── entity     Account, Balance, Transaction
 │   ├── enums      Currency, Direction
 │   └── dto        request/response records, ErrorResponse
-├── messaging      EventPublisher (after-commit relay) + event payloads
+├── messaging      DomainEventPublisher (interface) + AfterCommitEventPublisher
+│                  + RabbitEventRelay + event payloads
 ├── config         RabbitMqConfig, OpenApiConfig
 └── exception      domain exceptions + GlobalExceptionHandler
 

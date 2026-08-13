@@ -3,7 +3,7 @@ package com.tuum.banking.service;
 import com.tuum.banking.exception.AccountNotFoundException;
 import com.tuum.banking.exception.CurrencyNotHeldException;
 import com.tuum.banking.exception.InsufficientFundsException;
-import com.tuum.banking.messaging.EventPublisher;
+import com.tuum.banking.messaging.DomainEventPublisher;
 import com.tuum.banking.messaging.event.BalanceUpdatedEvent;
 import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.messaging.event.TransactionCreatedEvent;
@@ -53,7 +53,7 @@ class TransactionServiceTest {
     private TransactionMapper transactionMapper;
 
     @Mock
-    private EventPublisher eventPublisher;
+    private DomainEventPublisher eventPublisher;
 
     @InjectMocks
     private TransactionService transactionService;

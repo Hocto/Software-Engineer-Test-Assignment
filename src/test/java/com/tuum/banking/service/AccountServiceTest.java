@@ -1,7 +1,7 @@
 package com.tuum.banking.service;
 
 import com.tuum.banking.exception.AccountNotFoundException;
-import com.tuum.banking.messaging.EventPublisher;
+import com.tuum.banking.messaging.DomainEventPublisher;
 import com.tuum.banking.messaging.event.AccountCreatedEvent;
 import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.model.dto.AccountResponse;
@@ -43,7 +43,7 @@ class AccountServiceTest {
     private BalanceMapper balanceMapper;
 
     @Mock
-    private EventPublisher eventPublisher;
+    private DomainEventPublisher eventPublisher;
 
     @InjectMocks
     private AccountService accountService;
