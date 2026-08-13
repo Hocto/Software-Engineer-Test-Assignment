@@ -81,7 +81,7 @@ class TransactionServiceTest {
     @Test
     @DisplayName("IN increases the balance and reports the new balanceAfter")
     void inboundIncreasesBalance() {
-        lockedBalance("100.0000");
+        lockedBalance("100.00");
 
         TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("25.5000", Direction.IN));
 
@@ -94,20 +94,20 @@ class TransactionServiceTest {
     @Test
     @DisplayName("OUT decreases the balance")
     void outboundDecreasesBalance() {
-        lockedBalance("100.0000");
+        lockedBalance("100.00");
 
-        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("40.0000", Direction.OUT));
+        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("40.00", Direction.OUT));
 
         assertThat(response.balanceAfter()).isEqualByComparingTo("60.00");
-        verify(balanceMapper).updateAmount(eq(10L), argThatEquals("60.0000"));
+        verify(balanceMapper).updateAmount(eq(10L), argThatEquals("60.00"));
     }
 
     @Test
     @DisplayName("OUT may empty the balance exactly to zero")
     void outboundToExactlyZeroIsAllowed() {
-        lockedBalance("75.0000");
+        lockedBalance("75.00");
 
-        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("75.0000", Direction.OUT));
+        TransactionResponse response = transactionService.createTransaction(ACCOUNT_ID, request("75.00", Direction.OUT));
 
         assertThat(response.balanceAfter()).isEqualByComparingTo("0");
     }
@@ -115,9 +115,9 @@ class TransactionServiceTest {
     @Test
     @DisplayName("OUT beyond the available amount is rejected and writes nothing")
     void outboundBeyondBalanceIsRejected() {
-        lockedBalance("30.0000");
+        lockedBalance("30.00");
 
-        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("30.0001", Direction.OUT)))
+        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("30.01", Direction.OUT)))
                 .isInstanceOf(InsufficientFundsException.class)
                 .hasMessageContaining("Insufficient funds");
 
@@ -131,7 +131,7 @@ class TransactionServiceTest {
     void unknownAccountIsRejected() {
         when(accountMapper.existsById(ACCOUNT_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.0000", Direction.IN)))
+        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.00", Direction.IN)))
                 .isInstanceOf(AccountNotFoundException.class);
 
         verify(balanceMapper, never()).findByAccountIdAndCurrencyForUpdate(any(), any());
@@ -143,7 +143,7 @@ class TransactionServiceTest {
         when(accountMapper.existsById(ACCOUNT_ID)).thenReturn(true);
         when(balanceMapper.findByAccountIdAndCurrencyForUpdate(ACCOUNT_ID, Currency.EUR)).thenReturn(null);
 
-        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.0000", Direction.IN)))
+        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.00", Direction.IN)))
                 .isInstanceOf(BalanceNotFoundException.class)
                 .hasMessageContaining("EUR");
 
@@ -153,9 +153,9 @@ class TransactionServiceTest {
     @Test
     @DisplayName("publishes TRANSACTION_CREATED and BALANCE_UPDATED with both sides of the change")
     void publishesBothEvents() {
-        lockedBalance("100.0000");
+        lockedBalance("100.00");
 
-        transactionService.createTransaction(ACCOUNT_ID, request("10.0000", Direction.IN));
+        transactionService.createTransaction(ACCOUNT_ID, request("10.00", Direction.IN));
 
         ArgumentCaptor<TransactionCreatedEvent> txEvent = ArgumentCaptor.forClass(TransactionCreatedEvent.class);
         verify(eventPublisher).publishAfterCommit(eq(EventType.TRANSACTION_CREATED), txEvent.capture());
@@ -184,11 +184,11 @@ class TransactionServiceTest {
         Transaction stored = new Transaction();
         stored.setId(1L);
         stored.setAccountId(ACCOUNT_ID);
-        stored.setAmount(new BigDecimal("5.0000"));
+        stored.setAmount(new BigDecimal("5.00"));
         stored.setCurrency(Currency.EUR);
         stored.setDirection(Direction.IN);
         stored.setDescription("deposit");
-        stored.setBalanceAfter(new BigDecimal("5.0000"));
+        stored.setBalanceAfter(new BigDecimal("5.00"));
         when(accountMapper.existsById(ACCOUNT_ID)).thenReturn(true);
         when(transactionMapper.findByAccountId(ACCOUNT_ID)).thenReturn(List.of(stored));
 

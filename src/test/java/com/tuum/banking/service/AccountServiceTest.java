@@ -119,7 +119,7 @@ class AccountServiceTest {
     void getAccountReturnsBalances() {
         Account account = new Account(5L, "GB");
         account.setId(11L);
-        Balance balance = new Balance(11L, Currency.GBP, new BigDecimal("150.0000"));
+        Balance balance = new Balance(11L, Currency.GBP, new BigDecimal("150.00"));
         when(accountMapper.findById(11L)).thenReturn(account);
         when(balanceMapper.findByAccountId(11L)).thenReturn(List.of(balance));
 

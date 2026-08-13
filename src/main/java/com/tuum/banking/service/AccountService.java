@@ -7,6 +7,7 @@ import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.model.dto.AccountResponse;
 import com.tuum.banking.model.dto.BalanceResponse;
 import com.tuum.banking.model.dto.CreateAccountRequest;
+import com.tuum.banking.model.Money;
 import com.tuum.banking.model.entity.Account;
 import com.tuum.banking.model.entity.Balance;
 import com.tuum.banking.model.enums.Currency;
@@ -15,16 +16,12 @@ import com.tuum.banking.repository.BalanceMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 @Service
 public class AccountService {
-
-    /** New balances always start at zero; the scale matches NUMERIC(19,4). */
-    private static final BigDecimal ZERO_BALANCE = BigDecimal.ZERO.setScale(4);
 
     private final AccountMapper accountMapper;
     private final BalanceMapper balanceMapper;
@@ -51,7 +48,7 @@ public class AccountService {
         Set<Currency> currencies = new LinkedHashSet<>(request.currencies());
         List<Balance> balances = currencies.stream()
                 .map(currency -> {
-                    Balance balance = new Balance(account.getId(), currency, ZERO_BALANCE);
+                    Balance balance = new Balance(account.getId(), currency, Money.ZERO);
                     balanceMapper.insert(balance);
                     return balance;
                 })

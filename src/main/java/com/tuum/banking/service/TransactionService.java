@@ -7,6 +7,7 @@ import com.tuum.banking.messaging.EventPublisher;
 import com.tuum.banking.messaging.event.BalanceUpdatedEvent;
 import com.tuum.banking.messaging.event.EventType;
 import com.tuum.banking.messaging.event.TransactionCreatedEvent;
+import com.tuum.banking.model.Money;
 import com.tuum.banking.model.dto.CreateTransactionRequest;
 import com.tuum.banking.model.dto.TransactionResponse;
 import com.tuum.banking.model.entity.Balance;
@@ -62,11 +63,16 @@ public class TransactionService {
             throw new BalanceNotFoundException(accountId, request.currency());
         }
 
+        // Normalize once, then use the same value for the arithmetic, the persisted row and
+        // the response — otherwise POST echoes the caller's scale while GET returns the
+        // column's, and the same transaction serializes two different ways.
+        BigDecimal amount = Money.normalize(request.amount());
+
         BigDecimal previousAmount = balance.getAvailableAmount();
-        BigDecimal newAmount = applyDirection(previousAmount, request.amount(), request.direction());
+        BigDecimal newAmount = applyDirection(previousAmount, amount, request.direction());
 
         if (newAmount.signum() < 0) {
-            throw new InsufficientFundsException(accountId, request.currency(), previousAmount, request.amount());
+            throw new InsufficientFundsException(accountId, request.currency(), previousAmount, amount);
         }
 
         // 3. Update the balance and append the ledger row inside the same transaction.
@@ -74,7 +80,7 @@ public class TransactionService {
 
         Transaction transaction = new Transaction();
         transaction.setAccountId(accountId);
-        transaction.setAmount(request.amount());
+        transaction.setAmount(amount);
         transaction.setCurrency(request.currency());
         transaction.setDirection(request.direction());
         transaction.setDescription(request.description());

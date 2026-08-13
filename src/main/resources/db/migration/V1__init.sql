@@ -1,8 +1,12 @@
 -- Core banking schema.
 --
--- Money is stored as NUMERIC(19,4) and never as a floating point type: binary floating
+-- Money is stored as NUMERIC(19,2) and never as a floating point type: binary floating
 -- point cannot represent decimal fractions exactly, which is unacceptable for balances.
--- Java side maps to BigDecimal throughout.
+-- Java side maps to BigDecimal throughout (see com.tuum.banking.model.Money).
+--
+-- Scale 2 is the ISO-4217 minor unit of every supported currency (EUR, SEK, GBP, USD).
+-- Admitting a currency with a different minor unit — JPY at 0, KWD at 3 — would require
+-- a migration and a per-currency scale, not just a wider column.
 
 CREATE TABLE account
 (
@@ -19,7 +23,7 @@ CREATE TABLE balance
     id               BIGSERIAL PRIMARY KEY,
     account_id       BIGINT         NOT NULL REFERENCES account (id),
     currency         VARCHAR(3)     NOT NULL,
-    available_amount NUMERIC(19, 4) NOT NULL DEFAULT 0,
+    available_amount NUMERIC(19, 2) NOT NULL DEFAULT 0,
     -- Retained for auditing and as an optimistic-locking escape hatch. The write path
     -- uses SELECT ... FOR UPDATE, so this column is informational today.
     version          BIGINT         NOT NULL DEFAULT 0,
@@ -37,11 +41,11 @@ CREATE TABLE transaction
 (
     id            BIGSERIAL PRIMARY KEY,
     account_id    BIGINT         NOT NULL REFERENCES account (id),
-    amount        NUMERIC(19, 4) NOT NULL,
+    amount        NUMERIC(19, 2) NOT NULL,
     currency      VARCHAR(3)     NOT NULL,
     direction     VARCHAR(3)     NOT NULL,
     description   TEXT           NOT NULL,
-    balance_after NUMERIC(19, 4) NOT NULL,
+    balance_after NUMERIC(19, 2) NOT NULL,
     created_at    TIMESTAMPTZ    NOT NULL DEFAULT now(),
     CONSTRAINT ck_transaction_currency CHECK (currency IN ('EUR', 'SEK', 'GBP', 'USD')),
     CONSTRAINT ck_transaction_direction CHECK (direction IN ('IN', 'OUT')),

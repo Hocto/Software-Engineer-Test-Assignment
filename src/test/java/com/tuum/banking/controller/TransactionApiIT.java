@@ -210,14 +210,49 @@ class TransactionApiIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("more than four decimal places is rejected rather than silently rounded")
+    @DisplayName("more than two decimal places is rejected rather than silently rounded")
     void excessPrecisionReturns400() {
         AccountResponse account = createAccount(Currency.EUR);
 
-        ResponseEntity<JsonNode> response = post(account.accountId(), "10.00001", Currency.EUR, Direction.IN, "d");
+        // 10.555 is the boundary that matters: rounding it would move half a cent into a
+        // real balance. Pinning it here stops a future scale change doing that quietly.
+        ResponseEntity<JsonNode> response = post(account.accountId(), "10.555", Currency.EUR, Direction.IN, "d");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code").asText()).isEqualTo("VALIDATION_ERROR");
         assertThat(response.getBody().get("fieldErrors").get(0).get("field").asText()).isEqualTo("amount");
+    }
+
+    @Test
+    @DisplayName("POST and GET serialize the same transaction at the same scale")
+    void moneySerializesAtScaleTwoEverywhere() {
+        AccountResponse account = createAccount(Currency.EUR);
+
+        // Asserted on the raw response string, not a parsed BigDecimal: deserializing
+        // normalizes away exactly the discrepancy under test, which is how a POST returning
+        // 250.75 while GET returned 250.7500 went unnoticed in the first place.
+        String createBody = restTemplate.postForEntity(transactionsUrl(account.accountId()),
+                new CreateTransactionRequest(new BigDecimal("250.75"), Currency.EUR, Direction.IN, "salary"),
+                String.class).getBody();
+
+        String listBody = restTemplate.getForEntity(transactionsUrl(account.accountId()), String.class).getBody();
+
+        assertThat(createBody).contains("\"amount\":250.75").contains("\"balanceAfter\":250.75");
+        assertThat(listBody).contains("\"amount\":250.75").contains("\"balanceAfter\":250.75");
+        assertThat(createBody).doesNotContain("250.7500");
+        assertThat(listBody).doesNotContain("250.7500");
+    }
+
+    @Test
+    @DisplayName("a scale-2 amount is padded rather than echoed at the caller's scale")
+    void wholeAmountIsPaddedToScaleTwo() {
+        AccountResponse account = createAccount(Currency.EUR);
+
+        String createBody = restTemplate.postForEntity(transactionsUrl(account.accountId()),
+                new CreateTransactionRequest(new BigDecimal("40"), Currency.EUR, Direction.IN, "round"),
+                String.class).getBody();
+
+        assertThat(createBody).contains("\"amount\":40.00").contains("\"balanceAfter\":40.00");
     }
 
     @Test

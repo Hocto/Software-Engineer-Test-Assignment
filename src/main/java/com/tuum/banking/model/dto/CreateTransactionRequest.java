@@ -13,14 +13,14 @@ import java.math.BigDecimal;
 /**
  * Body of {@code POST /accounts/{accountId}/transactions}.
  *
- * <p>{@code @Digits} matches the {@code NUMERIC(19,4)} column so excess precision is
- * rejected explicitly rather than silently rounded by the database.
+ * <p>{@code @Digits} matches the {@code NUMERIC(19,2)} column so excess precision is
+ * rejected explicitly with a 400, rather than being silently rounded into someone's balance.
  */
 public record CreateTransactionRequest(
 
         @NotNull(message = "amount is required")
         @Positive(message = "amount must be greater than zero")
-        @Digits(integer = 15, fraction = 4, message = "amount supports at most 4 decimal places")
+        @Digits(integer = 15, fraction = 2, message = "amount supports at most 2 decimal places")
         BigDecimal amount,
 
         @NotNull(message = "currency is required")
