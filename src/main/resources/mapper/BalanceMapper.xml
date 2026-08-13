@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.tuum.banking.repository.BalanceMapper">
+
+    <resultMap id="balanceResultMap" type="com.tuum.banking.model.entity.Balance">
+        <id property="id" column="id"/>
+        <result property="accountId" column="account_id"/>
+        <result property="currency" column="currency"/>
+        <result property="availableAmount" column="available_amount"/>
+        <result property="version" column="version"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.tuum.banking.model.entity.Balance"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO balance (account_id, currency, available_amount)
+        VALUES (#{accountId}, #{currency}, #{availableAmount})
+    </insert>
+
+    <select id="findByAccountId" resultMap="balanceResultMap">
+        SELECT id, account_id, currency, available_amount, version
+        FROM balance
+        WHERE account_id = #{accountId}
+        ORDER BY currency
+    </select>
+
+    <!--
+      Pessimistic row lock. Concurrent transactions against the same (account, currency)
+      queue here until the holder commits or rolls back, which is what makes the
+      read-modify-write of available_amount safe without a retry loop.
+    -->
+    <select id="findByAccountIdAndCurrencyForUpdate" resultMap="balanceResultMap">
+        SELECT id, account_id, currency, available_amount, version
+        FROM balance
+        WHERE account_id = #{accountId}
+          AND currency = #{currency}
+        FOR UPDATE
+    </select>
+
+    <update id="updateAmount">
+        UPDATE balance
+        SET available_amount = #{availableAmount},
+            version          = version + 1,
+            updated_at       = now()
+        WHERE id = #{id}
+    </update>
+
+</mapper>
