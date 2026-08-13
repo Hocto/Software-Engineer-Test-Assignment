@@ -13,7 +13,7 @@ Built for the Tuum Software Engineer Test Assignment.
 | **Persistence** | MyBatis 3.0.5 + PostgreSQL 16, schema via Flyway |
 | **Messaging** | RabbitMQ 3.13 (topic exchange) |
 | **Build** | Gradle 9.7 (wrapper committed) |
-| **Tests** | JUnit 5, Mockito, Testcontainers — **93.5% line coverage**, 52 tests |
+| **Tests** | JUnit 5, Mockito, Testcontainers — **93.5% line coverage**, 60 tests |
 
 ---
 

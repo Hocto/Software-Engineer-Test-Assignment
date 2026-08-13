@@ -19,8 +19,15 @@ public final class Money {
 
     public static final int SCALE = 2;
 
-    /** A zero amount already at the canonical scale. */
-    public static final BigDecimal ZERO = BigDecimal.ZERO.setScale(SCALE);
+    /**
+     * A zero amount already at the canonical scale.
+     *
+     * <p>Built through {@link #normalize} rather than a bare {@code setScale(SCALE)}: the
+     * no-rounding-mode overload throws when rounding would be needed, so it is only ever safe
+     * by inspection of its argument. Routing through {@code normalize} means the scale rule
+     * has exactly one expression, and static analysis has nothing to flag.
+     */
+    public static final BigDecimal ZERO = normalize(BigDecimal.ZERO);
 
     private Money() {
     }
