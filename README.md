@@ -13,7 +13,7 @@ Built for the Tuum Software Engineer Test Assignment.
 | **Persistence** | MyBatis 3.0.5 + PostgreSQL 16, schema via Flyway |
 | **Messaging** | RabbitMQ 3.13 (topic exchange) |
 | **Build** | Gradle 9.7 (wrapper committed) |
-| **Tests** | JUnit 5, Mockito, Testcontainers — **93.5% line coverage**, 60 tests |
+| **Tests** | JUnit 5, Mockito, Testcontainers — **93.9% line coverage**, 65 tests |
 
 ---
 
@@ -502,9 +502,26 @@ src/main/resources/
 | `ConcurrentTransactionIT` | No lost updates, no overdraft, gap-free ledger under 40-thread contention |
 | `ThroughputTest` (`perf`) | Throughput measurement, excluded from `test` |
 
-Coverage is **92.7% line / 94.4% branch** across 45 tests, gated at 80% by
-`jacocoTestCoverageVerification`. Config classes, DTOs and event records are excluded from
-the gate — they carry no branching logic worth counting.
+Coverage across **65 tests**, from `build/reports/jacoco/test/jacocoTestReport.xml`:
+
+| Counter | Covered | |
+|---|---|---|
+| Line | **93.9%** | 230 / 245 |
+| Instruction | 90.8% | 941 / 1036 |
+| Method | 95.2% | 80 / 84 |
+| Branch | **78.1%** | 25 / 32 |
+
+`jacocoTestCoverageVerification` gates on **line** coverage at 80%. Config classes, DTOs and
+event records are excluded — they carry no branching logic worth counting.
+
+Branch coverage is reported honestly rather than quietly omitted: at 78.1% it sits below the
+line figure, and below the gate. The denominator is why it moves so sharply — there are only
+32 branches in the whole gated set, so a single uncovered one costs about three points. That
+number fell as the code improved, not as it decayed: replacing the `direction == IN ? add :
+subtract` conditional with behaviour on the enum, and dropping the unreachable
+`NOT_ACCEPTABLE` case, both removed branches that *were* covered, leaving a smaller
+denominator behind. Gating on a metric that punishes deleting conditionals would be the wrong
+incentive, which is why the gate is on lines.
 
 ---
 
@@ -558,7 +575,9 @@ actually verified rather than assumed:
   infrastructure ports at all.
 
 **Defects found by a later self-review, after the first version was already "done"** — worth
-listing separately, because a passing suite at 92.7% coverage reported none of them:
+listing separately, because the suite passed at 92.7% line coverage *at that point* and
+reported none of them. That figure is history, not the current one above; it is quoted to
+make the point that a green bar said nothing about any of these:
 
 - `GlobalExceptionHandler` answered **500** for `405`, `415` and `404`. A standalone
   `@ExceptionHandler(Exception.class)` was intercepting Spring's own MVC exceptions before
