@@ -91,11 +91,14 @@ The throughput harness is excluded from the normal test run:
 ./gradlew perfTest
 ```
 
-> **Non-Docker-Desktop runtimes** (Colima, Rancher Desktop, Podman, rootless): Testcontainers
-> only auto-detects Docker Desktop's socket and otherwise fails with *"Could not find a valid
-> Docker environment"*. The build handles this — it asks `docker context inspect` for the real
-> socket and passes it to the test JVM, so no export is needed. Setting `DOCKER_HOST` yourself
-> still overrides it.
+> **On Docker Desktop there is nothing to configure.**
+>
+> On other runtimes — Colima, Rancher Desktop, Podman, rootless — Testcontainers only
+> auto-detects Docker Desktop's socket and would otherwise fail with *"Could not find a valid
+> Docker environment"*. The build asks `docker context inspect` where the daemon actually
+> listens and passes that to the test JVM, so nothing needs exporting there either. An
+> explicit `DOCKER_HOST` always takes precedence, and on Windows (`npipe://`) detection stands
+> aside and lets Testcontainers do its own thing.
 
 ---
 
@@ -539,9 +542,11 @@ and review of the output at each step.
 **Problems found and fixed during development** — recorded because they show what was
 actually verified rather than assumed:
 
-- Testcontainers failed with "Could not find a valid Docker environment" — Colima's socket
-  is not auto-detected. Resolved with environment variables locally, and *not* baked into the
-  repo, since hardcoding a Colima path would break reviewers on Docker Desktop.
+- Testcontainers failed with "Could not find a valid Docker environment" — Colima's socket is
+  not auto-detected. First worked around with local environment variables and merely documented,
+  which was the wrong answer: it pushed setup onto anyone not using Docker Desktop. The build
+  now asks `docker context inspect` where the daemon listens. Hardcoding a Colima path would
+  have broken Docker Desktop reviewers; asking Docker breaks nobody.
 - An `await()` in the "publishes nothing on rejection" test used a blocking queue read, which
   cannot assert absence inside its own timeout. Fixed with a non-blocking drain plus
   `pollDelay`.
