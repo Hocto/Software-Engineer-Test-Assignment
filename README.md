@@ -28,22 +28,27 @@ docker compose up --build
 That starts Postgres, RabbitMQ and the application. The app waits until both dependencies
 report *healthy*, then Flyway applies `V1__init.sql` before the first request is served.
 
-| What | Where |
-|---|---|
-| API | http://localhost:8080 |
-| Swagger UI | http://localhost:8080/swagger-ui.html |
-| Health | http://localhost:8080/actuator/health |
-| RabbitMQ management | http://localhost:15672 — `guest` / `guest` |
+| Service | Base URL | Override with |
+|---|---|---|
+| Application | `http://localhost:8080` | `APP_PORT` |
+| RabbitMQ management | `http://localhost:15672` — `guest` / `guest` | `RABBITMQ_UI_PORT` |
 
-> These four URLs are the **only** place this README hardcodes a port. Everywhere below,
-> endpoints are written as paths (`POST /accounts`) so they stay correct whichever port you
-> use. If you override the ports, substitute them here — `APP_PORT=9090` makes Swagger
-> `http://localhost:9090/swagger-ui.html`.
->
-> To have the running stack tell you rather than working it out:
-> ```bash
-> docker compose port app 8080
-> ```
+Those two rows are the **only** place this README names a port. Everything else is written as
+a path, so it stays correct whichever ports you run on:
+
+| What | Path |
+|---|---|
+| Swagger UI | `/swagger-ui.html` |
+| OpenAPI spec | `/v3/api-docs` |
+| Health | `/actuator/health` |
+| API | `/accounts`, `/accounts/{id}/transactions` |
+
+To have the running stack tell you which host port it actually bound, instead of working it
+out from what you passed:
+
+```bash
+docker compose port app 8080
+```
 
 **If a port is already taken** — both host ports are overridable, no file edits:
 
