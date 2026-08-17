@@ -65,9 +65,7 @@ The app reaches them over the compose network, and binding them is the most comm
 stack like this fails on someone else's machine. (It happened during development here: an
 unrelated container already held 5432.)
 
-**If you ran an earlier build of this branch**, wipe the volume first — `V1__init.sql` was
-revised (money moved to `NUMERIC(19,2)`) and Flyway will refuse to validate a database that
-applied the previous version:
+To stop the stack and discard its data:
 
 ```bash
 docker compose down -v
@@ -223,10 +221,11 @@ exists — a business rule blocks it. That separation lets a client distinguish 
 request" from "the request was fine, the account state does not permit it", which are
 different things to a caller and often different code paths.
 
-`CURRENCY_NOT_HELD` is 422 for exactly the same reason, and it started out as a 400. The
-earlier reasoning — *the URL's resource exists, so the fault is in the body* — was self
-consistent but produced an incoherent result: two failures that are both "valid request,
-account state forbids it" answered with different statuses. The rule above resolves it.
+`CURRENCY_NOT_HELD` is 422 for exactly the same reason. A tempting alternative is 400, on the
+grounds that the resource named by the URL exists and it is the *body* that names an unusable
+currency. That argument is self-consistent but ends up incoherent: it answers two failures
+that are both "valid request, account state forbids it" with different statuses. The rule
+above keeps them together.
 
 ---
 
