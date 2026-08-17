@@ -15,7 +15,6 @@ import com.tuum.banking.repository.BalanceMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -45,15 +44,15 @@ public class AccountService {
         Account account = new Account(request.customerId(), request.country());
         accountMapper.insert(account);
 
-        // A plain loop rather than a stream: each step writes to the database, and a map()
-        // that inserts rows as a side effect reads like a pure transformation while not being
-        // one. LinkedHashSet both de-duplicates and preserves the requested order.
-        List<Balance> balances = new ArrayList<>();
-        for (Currency currency : new LinkedHashSet<>(request.currencies())) {
-            Balance balance = new Balance(account.getId(), currency, Money.ZERO);
-            balanceMapper.insert(balance);
-            balances.add(balance);
-        }
+        // LinkedHashSet both de-duplicates and preserves the requested order. Building the
+        // list first and inserting once keeps account creation to two round trips whatever
+        // the currency count. Nothing downstream reads the generated balance ids today —
+        // the response and the event both carry only amount and currency — but the mapper
+        // writes them back regardless, so that stays true if either shape gains an id.
+        List<Balance> balances = new LinkedHashSet<>(request.currencies()).stream()
+                .map(currency -> new Balance(account.getId(), currency, Money.ZERO))
+                .toList();
+        balanceMapper.insertAll(balances);
 
         eventPublisher.publishAfterCommit(EventType.ACCOUNT_CREATED,
                 AccountCreatedEvent.from(account, balances));

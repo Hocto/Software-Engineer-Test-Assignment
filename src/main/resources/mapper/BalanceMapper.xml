@@ -12,10 +12,17 @@
         <result property="version" column="version"/>
     </resultMap>
 
-    <insert id="insert" parameterType="com.tuum.banking.model.entity.Balance"
-            useGeneratedKeys="true" keyProperty="id">
+    <!--
+      One multi-row INSERT rather than one statement per currency. Opening an account with
+      four currencies is a single round trip instead of four; generated ids are written back
+      onto the list elements, which the ACCOUNT_CREATED event needs.
+    -->
+    <insert id="insertAll" useGeneratedKeys="true" keyProperty="balances.id">
         INSERT INTO balance (account_id, currency, available_amount)
-        VALUES (#{accountId}, #{currency}, #{availableAmount})
+        VALUES
+        <foreach collection="balances" item="balance" separator=",">
+            (#{balance.accountId}, #{balance.currency}, #{balance.availableAmount})
+        </foreach>
     </insert>
 
     <select id="findByAccountId" resultMap="balanceResultMap">

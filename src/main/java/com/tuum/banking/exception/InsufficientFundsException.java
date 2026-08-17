@@ -15,10 +15,19 @@ import java.math.BigDecimal;
  */
 public class InsufficientFundsException extends BusinessException {
 
-    public InsufficientFundsException(Long accountId, Currency currency,
-                                      BigDecimal available, BigDecimal requested) {
+    /**
+     * The message deliberately omits the available balance and reports only what the caller
+     * already supplied — account, currency, amount. Echoing the balance would turn a rejected
+     * withdrawal into a balance-disclosure oracle: anyone able to reach this endpoint could
+     * binary-search an account's funds without ever reading it. That is harmless while the API
+     * is unauthenticated and {@code GET /accounts/{id}} exposes the same figure, but it is the
+     * wrong default to leave in place for whenever authentication arrives.
+     *
+     * <p>Operators lose nothing: the account is named, and its balance is one query away.
+     */
+    public InsufficientFundsException(Long accountId, Currency currency, BigDecimal requested) {
         super(ErrorCode.INSUFFICIENT_FUNDS, HttpStatus.UNPROCESSABLE_ENTITY,
-                "Insufficient funds on account %d: %s %s available, %s requested"
-                        .formatted(accountId, available, currency, requested));
+                "Insufficient funds on account %d to withdraw %s %s"
+                        .formatted(accountId, requested, currency));
     }
 }

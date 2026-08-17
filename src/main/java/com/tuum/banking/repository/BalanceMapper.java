@@ -11,7 +11,13 @@ import java.util.List;
 @Mapper
 public interface BalanceMapper {
 
-    void insert(Balance balance);
+    /**
+     * Inserts every balance in one statement, writing the generated ids back onto the
+     * elements. One round trip regardless of how many currencies an account is opened with.
+     *
+     * @param balances must not be empty — an empty list would produce invalid SQL
+     */
+    void insertAll(@Param("balances") List<Balance> balances);
 
     List<Balance> findByAccountId(@Param("accountId") Long accountId);
 

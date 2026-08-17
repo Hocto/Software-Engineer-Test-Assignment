@@ -71,6 +71,9 @@ class TransactionServiceTest {
         balance.setId(10L);
         when(accountMapper.existsById(ACCOUNT_ID)).thenReturn(true);
         when(balanceMapper.findByAccountIdAndCurrencyForUpdate(ACCOUNT_ID, Currency.EUR)).thenReturn(balance);
+        // The service now asserts the update touched exactly one row. Mockito would otherwise
+        // return 0 for an int, which is precisely the "row vanished" case.
+        lenient().when(balanceMapper.updateAmount(any(), any())).thenReturn(1);
         return balance;
     }
 
@@ -119,9 +122,29 @@ class TransactionServiceTest {
 
         assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("30.01", Direction.OUT)))
                 .isInstanceOf(InsufficientFundsException.class)
-                .hasMessageContaining("Insufficient funds");
+                .hasMessageContaining("Insufficient funds")
+                // The rejection must not reveal what the account actually holds, or a caller
+                // could search for the balance by probing withdrawals.
+                .hasMessageNotContaining("30.00")
+                .hasMessageNotContaining("available");
 
         verify(balanceMapper, never()).updateAmount(any(), any());
+        verify(transactionMapper, never()).insert(any());
+        verify(eventPublisher, never()).publishAfterCommit(any(), any());
+    }
+
+    @Test
+    @DisplayName("a balance update that touches no row aborts instead of writing a ledger entry")
+    void vanishedBalanceRowAborts() {
+        lockedBalance("100.00");
+        // Cannot happen while the row is held under FOR UPDATE, but if it ever did, recording
+        // a transaction against a balance that was never stored would corrupt the ledger.
+        when(balanceMapper.updateAmount(any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> transactionService.createTransaction(ACCOUNT_ID, request("10.00", Direction.IN)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("exactly one balance row");
+
         verify(transactionMapper, never()).insert(any());
         verify(eventPublisher, never()).publishAfterCommit(any(), any());
     }

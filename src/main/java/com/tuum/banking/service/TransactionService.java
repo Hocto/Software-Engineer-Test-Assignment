@@ -69,11 +69,21 @@ public class TransactionService {
         BigDecimal newAmount = request.direction().applyTo(previousAmount, amount);
 
         if (newAmount.signum() < 0) {
-            throw new InsufficientFundsException(accountId, request.currency(), previousAmount, amount);
+            throw new InsufficientFundsException(accountId, request.currency(), amount);
         }
 
         // 3. Update the balance and append the ledger row inside the same transaction.
-        balanceMapper.updateAmount(balance.getId(), newAmount);
+        //    The row is held under FOR UPDATE, so anything other than exactly one row
+        //    updated means the row vanished beneath the lock — impossible under normal
+        //    operation, and not something to write a ledger entry on top of. Fail loudly
+        //    and let the transaction roll back rather than record a balance that was
+        //    never stored.
+        int updated = balanceMapper.updateAmount(balance.getId(), newAmount);
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "Expected to update exactly one balance row for balance %d, but updated %d"
+                            .formatted(balance.getId(), updated));
+        }
 
         Transaction transaction = newTransaction(accountId, request, amount, newAmount);
         transactionMapper.insert(transaction);

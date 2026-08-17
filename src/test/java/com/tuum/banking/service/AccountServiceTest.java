@@ -74,9 +74,10 @@ class AccountServiceTest {
                 .extracting(BalanceResponse::availableAmount)
                 .allSatisfy(amount -> assertThat(amount).isEqualByComparingTo(BigDecimal.ZERO));
 
-        ArgumentCaptor<Balance> balances = ArgumentCaptor.forClass(Balance.class);
-        verify(balanceMapper, times(2)).insert(balances.capture());
-        assertThat(balances.getAllValues()).allSatisfy(balance -> {
+        // One batched call, not one per currency.
+        ArgumentCaptor<List<Balance>> balances = ArgumentCaptor.captor();
+        verify(balanceMapper, times(1)).insertAll(balances.capture());
+        assertThat(balances.getValue()).hasSize(2).allSatisfy(balance -> {
             assertThat(balance.getAccountId()).isEqualTo(42L);
             assertThat(balance.getAvailableAmount()).isEqualByComparingTo(BigDecimal.ZERO);
         });
@@ -94,7 +95,10 @@ class AccountServiceTest {
         assertThat(response.balances())
                 .extracting(BalanceResponse::currency)
                 .containsExactly(Currency.EUR, Currency.GBP);
-        verify(balanceMapper, times(2)).insert(any(Balance.class));
+
+        ArgumentCaptor<List<Balance>> balances = ArgumentCaptor.captor();
+        verify(balanceMapper).insertAll(balances.capture());
+        assertThat(balances.getValue()).hasSize(2);
     }
 
     @Test
