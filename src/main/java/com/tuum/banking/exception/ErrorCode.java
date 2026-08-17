@@ -23,10 +23,14 @@ public enum ErrorCode {
     INVALID_DIRECTION,
     MALFORMED_REQUEST,
 
-    // Protocol-level failures, raised by Spring MVC before a controller is reached
+    // Protocol-level failures, raised by Spring MVC before a controller is reached.
+    //
+    // There is deliberately no NOT_ACCEPTABLE here. A 406 means nothing the client accepts
+    // can be produced — so the error body cannot be written either, and the response goes out
+    // empty (verified: Content-Length: 0). A code no client can ever observe does not belong
+    // in a published contract.
     METHOD_NOT_ALLOWED,
     UNSUPPORTED_MEDIA_TYPE,
-    NOT_ACCEPTABLE,
     NOT_FOUND,
 
     // Domain failures

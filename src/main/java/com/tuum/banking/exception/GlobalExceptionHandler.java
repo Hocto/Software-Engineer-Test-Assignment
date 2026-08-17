@@ -173,9 +173,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.equals(HttpStatus.UNSUPPORTED_MEDIA_TYPE)) {
             return ErrorCode.UNSUPPORTED_MEDIA_TYPE;
         }
-        if (status.equals(HttpStatus.NOT_ACCEPTABLE)) {
-            return ErrorCode.NOT_ACCEPTABLE;
-        }
+        // 406 is not listed: its body is never written, because by definition the client
+        // accepts no format this service can produce. It falls through to the 4xx default,
+        // which no one will ever read.
         if (status.equals(HttpStatus.NOT_FOUND)) {
             return ErrorCode.NOT_FOUND;
         }

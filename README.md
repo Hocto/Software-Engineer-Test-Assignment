@@ -35,6 +35,16 @@ report *healthy*, then Flyway applies `V1__init.sql` before the first request is
 | Health | http://localhost:8080/actuator/health |
 | RabbitMQ management | http://localhost:15672 — `guest` / `guest` |
 
+> These four URLs are the **only** place this README hardcodes a port. Everywhere below,
+> endpoints are written as paths (`POST /accounts`) so they stay correct whichever port you
+> use. If you override the ports, substitute them here — `APP_PORT=9090` makes Swagger
+> `http://localhost:9090/swagger-ui.html`.
+>
+> To have the running stack tell you rather than working it out:
+> ```bash
+> docker compose port app 8080
+> ```
+
 **If a port is already taken** — both host ports are overridable, no file edits:
 
 ```bash
@@ -159,12 +169,16 @@ machine-readable identifier — branch on it rather than on status or message te
 | Unparseable JSON body | 400 | `MALFORMED_REQUEST` |
 | Unsupported HTTP method for the path | 405 | `METHOD_NOT_ALLOWED` |
 | `Content-Type` the endpoint cannot consume | 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| No representation matching `Accept` | 406 | `NOT_ACCEPTABLE` |
 | Unknown path | 404 | `NOT_FOUND` |
 | Account does not exist | 404 | `ACCOUNT_NOT_FOUND` |
 | Account exists but holds no balance in that currency | **422** | `CURRENCY_NOT_HELD` |
 | OUT exceeds available funds | **422** | `INSUFFICIENT_FUNDS` |
 | Anything unhandled | 500 | `INTERNAL_ERROR` |
+
+A request whose `Accept` header matches nothing this service produces gets a bare **406 with
+no body** — not an `ErrorResponse`. That is unavoidable rather than an oversight: 406 means
+the client accepts no format we can write, so the error body cannot be written either. There
+is deliberately no error code for it, since none could ever be delivered.
 
 The statuses follow one rule, which is worth stating because it decides the ambiguous cases:
 
