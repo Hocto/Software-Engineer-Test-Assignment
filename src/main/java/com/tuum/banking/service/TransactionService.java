@@ -12,7 +12,6 @@ import com.tuum.banking.model.dto.CreateTransactionRequest;
 import com.tuum.banking.model.dto.TransactionResponse;
 import com.tuum.banking.model.entity.Balance;
 import com.tuum.banking.model.entity.Transaction;
-import com.tuum.banking.model.enums.Direction;
 import com.tuum.banking.repository.AccountMapper;
 import com.tuum.banking.repository.BalanceMapper;
 import com.tuum.banking.repository.TransactionMapper;
@@ -69,7 +68,7 @@ public class TransactionService {
         BigDecimal amount = Money.normalize(request.amount());
 
         BigDecimal previousAmount = balance.getAvailableAmount();
-        BigDecimal newAmount = applyDirection(previousAmount, amount, request.direction());
+        BigDecimal newAmount = request.direction().applyTo(previousAmount, amount);
 
         if (newAmount.signum() < 0) {
             throw new InsufficientFundsException(accountId, request.currency(), previousAmount, amount);
@@ -106,9 +105,5 @@ public class TransactionService {
         return transactionMapper.findByAccountId(accountId).stream()
                 .map(TransactionResponse::from)
                 .toList();
-    }
-
-    private static BigDecimal applyDirection(BigDecimal current, BigDecimal amount, Direction direction) {
-        return direction == Direction.IN ? current.add(amount) : current.subtract(amount);
     }
 }

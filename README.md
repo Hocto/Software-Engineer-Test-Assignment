@@ -257,6 +257,18 @@ The balance update and the transaction insert share one `@Transactional` boundar
 ledger can never disagree with the balance. `ConcurrentTransactionIT` enforces all of this —
 it fails if the `FOR UPDATE` is removed.
 
+### Behaviour sits on the type that owns it
+
+`Direction` carries its own arithmetic (`IN(BigDecimal::add)`, `OUT(BigDecimal::subtract)`)
+rather than the service branching on it. The reason is failure mode, not neatness: a
+`direction == IN ? add : subtract` conditional elsewhere can be left unextended when a
+constant is added, and it still compiles — the new direction silently takes the `else` arm
+and money moves the wrong way. Supplying the operation at the constant makes that a compile
+error instead.
+
+`Direction.applyTo` returns the result without judging it. Rejecting an overdraft needs
+account context the enum does not have, so that decision stays in `TransactionService`.
+
 ### Events publish *after* commit, not during
 
 Domain events are raised via `ApplicationEventPublisher` and relayed to RabbitMQ from a
