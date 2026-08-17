@@ -13,7 +13,7 @@ Built for the Tuum Software Engineer Test Assignment.
 | **Persistence** | MyBatis 3.0.5 + PostgreSQL 16, schema via Flyway |
 | **Messaging** | RabbitMQ 3.13 (topic exchange) |
 | **Build** | Gradle 9.7 (wrapper committed) |
-| **Tests** | JUnit 5, Mockito, Testcontainers — **93.9% line coverage**, 65 tests |
+| **Tests** | JUnit 5, Mockito, Testcontainers — **95.9% line, 100% branch**, 79 tests |
 
 ---
 
@@ -82,7 +82,7 @@ JDK install is needed.
 ./gradlew build
 ```
 
-This runs unit tests, integration tests and the 80% Jacoco coverage gate. Reports land in
+This runs unit tests, integration tests and the Jacoco coverage gates (80% line, 85% branch). Reports land in
 `build/reports/tests/test/index.html` and `build/reports/jacoco/test/html/index.html`.
 
 The throughput harness is excluded from the normal test run:
@@ -502,26 +502,32 @@ src/main/resources/
 | `ConcurrentTransactionIT` | No lost updates, no overdraft, gap-free ledger under 40-thread contention |
 | `ThroughputTest` (`perf`) | Throughput measurement, excluded from `test` |
 
-Coverage across **65 tests**, from `build/reports/jacoco/test/jacocoTestReport.xml`:
+Coverage across **79 tests**, from `build/reports/jacoco/test/jacocoTestReport.xml`:
 
-| Counter | Covered | |
-|---|---|---|
-| Line | **93.9%** | 230 / 245 |
-| Instruction | 90.8% | 941 / 1036 |
-| Method | 95.2% | 80 / 84 |
-| Branch | **78.1%** | 25 / 32 |
+| Counter | Covered | | Gate |
+|---|---|---|---|
+| Line | **95.9%** | 235 / 245 | ≥ 80% |
+| Instruction | 94.3% | 977 / 1036 | — |
+| Complexity | 96.0% | 96 / 100 | — |
+| Method | 95.2% | 80 / 84 | — |
+| Branch | **100%** | 32 / 32 | ≥ 85% |
 
-`jacocoTestCoverageVerification` gates on **line** coverage at 80%. Config classes, DTOs and
-event records are excluded — they carry no branching logic worth counting.
+Config classes, DTOs and event records are excluded from the gate — they carry no branching
+logic worth counting.
 
-Branch coverage is reported honestly rather than quietly omitted: at 78.1% it sits below the
-line figure, and below the gate. The denominator is why it moves so sharply — there are only
-32 branches in the whole gated set, so a single uncovered one costs about three points. That
-number fell as the code improved, not as it decayed: replacing the `direction == IN ? add :
-subtract` conditional with behaviour on the enum, and dropping the unreachable
-`NOT_ACCEPTABLE` case, both removed branches that *were* covered, leaving a smaller
-denominator behind. Gating on a metric that punishes deleting conditionals would be the wrong
-incentive, which is why the gate is on lines.
+The last uncovered branches all sat in `GlobalExceptionHandler`, on paths only Spring's own
+MVC exceptions reach: a 5xx raised by an inherited handler, a bind failure on a non-enum
+field, a `WebRequest` that is not a `ServletWebRequest`. `GlobalExceptionHandlerTest` covers
+them by calling the template methods directly, because several genuinely cannot be provoked
+over HTTP — no request to this API makes Spring produce a 503, and a servlet stack never
+hands you a non-servlet request. They are worth pinning regardless: that 5xx path is what
+stops internal exception text reaching a client, and two of the tests assert exactly that,
+using a fake connection string and a fake IBAN as canaries.
+
+The branch gate sits at 85%, below the achieved 100%, deliberately. Only ~32 branches exist
+in the gated set, so one uncovered conditional costs about three points; a gate pinned to the
+current figure would fail on the next legitimate `if` before its test landed. It is a floor
+against untested conditionals, not a ratchet.
 
 ---
 

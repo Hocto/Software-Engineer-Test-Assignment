@@ -146,6 +146,15 @@ tasks.named('jacocoTestCoverageVerification') {
                 value = 'COVEREDRATIO'
                 minimum = 0.80
             }
+            // Branch sits below the achieved 100% on purpose. The gated set holds only ~32
+            // branches, so one uncovered conditional costs about three points — a gate at the
+            // current figure would fail on the next legitimate `if`, before its test lands in
+            // the same commit. 0.85 is a floor against untested conditionals, not a ratchet.
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
         }
     }
 }
