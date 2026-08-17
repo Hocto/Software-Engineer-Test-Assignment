@@ -13,7 +13,7 @@ Built for the Tuum Software Engineer Test Assignment.
 | **Persistence** | MyBatis 3.0.5 + PostgreSQL 16, schema via Flyway |
 | **Messaging** | RabbitMQ 3.13 (topic exchange) |
 | **Build** | Gradle 9.7 (wrapper committed) |
-| **Tests** | JUnit 5, Mockito, Testcontainers — **95.9% line, 100% branch**, 79 tests |
+| **Tests** | JUnit 5, Mockito, Testcontainers — **95.9% line, 100% branch**, 83 tests |
 
 ---
 
@@ -378,6 +378,16 @@ the account.
 - **Actuator exposes only `health` and `info`**; no `env`, `beans` or `heapdump` over HTTP.
 - **The container runs as a non-root user**, and error responses never include stack traces
   or internal type names.
+- **Balances insert in one statement.** Opening an account is two round trips whatever the
+  currency count, rather than one insert per currency.
+- **Rejections repeat only what the caller sent.** The insufficient-funds message names the
+  account, amount and currency, never the available balance — otherwise a rejected withdrawal
+  becomes a disclosure oracle, letting anyone who can reach the endpoint binary-search an
+  account's funds without reading it. Harmless while the API is unauthenticated and
+  `GET /accounts/{id}` shows the same figure, but the wrong default to leave in place.
+- **Writes verify they changed a row.** The balance update asserts exactly one row was
+  affected before the ledger entry is written, so a transaction can never record a balance
+  change that did not happen.
 
 ---
 
@@ -496,19 +506,29 @@ src/main/resources/
 
 | Suite | What it covers |
 |---|---|
+| `MoneyTest`, `DirectionTest` | The money scale rule, and the arithmetic each direction implies |
 | `AccountServiceTest`, `TransactionServiceTest` | Service logic against mocked mappers |
+| `GlobalExceptionHandlerTest` | Error rendering paths that cannot be reached over HTTP |
+| `BalanceMapperIT` | Batched insert SQL and generated-key write-back, against real Postgres |
 | `AccountApiIT`, `TransactionApiIT` | All four endpoints, every error path, real queue payloads |
+| `ErrorHandlingIT` | Protocol-level failures — 405, 415, 404, whitespace-only input |
 | `ConcurrentTransactionIT` | No lost updates, no overdraft, gap-free ledger under 40-thread contention |
 | `ThroughputTest` (`perf`) | Throughput measurement, excluded from `test` |
 
-Coverage across **79 tests**, from `build/reports/jacoco/test/jacocoTestReport.xml`:
+Two of those exist because mocks cannot answer the question being asked. `BalanceMapperIT`
+runs the batched `INSERT` against a real database, since the service tests mock the mapper
+and would pass against invalid SQL. `GlobalExceptionHandlerTest` calls the handler's template
+methods directly, because no request to this API makes Spring produce a 503 and a servlet
+stack never yields a non-servlet request.
+
+Coverage across **83 tests**, from `build/reports/jacoco/test/jacocoTestReport.xml`:
 
 | Counter | Covered | | Gate |
 |---|---|---|---|
 | Line | **95.9%** | 235 / 245 | ≥ 80% |
-| Instruction | 94.3% | 977 / 1036 | — |
-| Complexity | 96.0% | 96 / 100 | — |
-| Method | 95.2% | 80 / 84 | — |
+| Instruction | 94.2% | 960 / 1019 | — |
+| Complexity | 96.1% | 98 / 102 | — |
+| Method | 95.3% | 82 / 86 | — |
 | Branch | **100%** | 32 / 32 | ≥ 85% |
 
 Config classes, DTOs and event records are excluded from the gate — they carry no branching
