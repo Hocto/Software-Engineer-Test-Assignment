@@ -41,6 +41,10 @@ report *healthy*, then Flyway applies `V1__init.sql` before the first request is
 APP_PORT=9090 RABBITMQ_UI_PORT=15673 docker compose up --build
 ```
 
+If the API returns unexpected 404s while every container reports healthy, another process
+may already hold 8080 — some Docker runtimes bind over it silently rather than failing. The
+override above is the fix; the symptom just doesn't look like a port clash.
+
 Postgres (5432) and the AMQP port (5672) are deliberately **not** published to the host.
 The app reaches them over the compose network, and binding them is the most common way a
 stack like this fails on someone else's machine. (It happened during development here: an
