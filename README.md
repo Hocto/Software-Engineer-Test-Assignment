@@ -91,10 +91,11 @@ The throughput harness is excluded from the normal test run:
 ./gradlew perfTest
 ```
 
-> **Colima users:** Testcontainers does not auto-detect Colima's socket. Export
-> `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and
-> `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` first. Docker Desktop needs
-> nothing.
+> **Non-Docker-Desktop runtimes** (Colima, Rancher Desktop, Podman, rootless): Testcontainers
+> only auto-detects Docker Desktop's socket and otherwise fails with *"Could not find a valid
+> Docker environment"*. The build handles this — it asks `docker context inspect` for the real
+> socket and passes it to the test JVM, so no export is needed. Setting `DOCKER_HOST` yourself
+> still overrides it.
 
 ---
 
@@ -393,10 +394,19 @@ the JIT has compiled the request path and the Hikari pool is filled.
 
 Two scenarios, because the gap between them is the actual finding:
 
-| Scenario | Run 1 | Run 2 |
-|---|---|---|
-| Spread across 32 accounts (uncontended) | 1332 txn/s | 1330 txn/s |
-| Single account (every write on one row lock) | 436 txn/s | 460 txn/s |
+| Scenario | Run 1 | Run 2 | Run 3 |
+|---|---|---|---|
+| Spread across 32 accounts (uncontended) | 1332 txn/s | 1330 txn/s | 1593 txn/s |
+| Single account (every write on one row lock) | 436 txn/s | 460 txn/s | 420 txn/s |
+
+Run-to-run spread is roughly ±20% on a 2-CPU VM, so read these as an order of magnitude
+rather than a precise figure.
+
+> **Run this with the compose stack stopped.** `perfTest` starts its own Testcontainers
+> Postgres and RabbitMQ, so leaving `docker compose up` running puts two databases, two
+> brokers and the application container on the same 2 CPUs. Measured with the stack up:
+> **996 txn/s uncontended, 310 contended** — about 30% lower, and nothing to do with the
+> code. `docker compose down` first.
 
 ### Hardware, and why these are a floor
 

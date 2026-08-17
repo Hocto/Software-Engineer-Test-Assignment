@@ -49,6 +49,38 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+/**
+ * Testcontainers only auto-detects Docker Desktop's socket. On Colima, Rancher Desktop,
+ * Podman or a rootless daemon it fails with "Could not find a valid Docker environment",
+ * and the usual advice is to export DOCKER_HOST yourself — a setup step this project is
+ * otherwise careful not to require.
+ *
+ * The Docker CLI already knows the answer, so ask it instead of guessing socket paths.
+ * An explicit DOCKER_HOST always wins, and any failure here is ignored: Docker Desktop
+ * users need none of this, and a broken detection must never be worse than no detection.
+ */
+def detectedDockerHost = {
+    if (System.getenv('DOCKER_HOST')) {
+        return null
+    }
+    try {
+        def process = ['docker', 'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'].execute()
+        def host = process.inputStream.text.trim()
+        return process.waitFor() == 0 && host.startsWith('unix://') ? host : null
+    } catch (Exception ignored) {
+        return null
+    }
+}()
+
+def configureDockerEnvironment = { Test task ->
+    if (detectedDockerHost) {
+        task.environment 'DOCKER_HOST', detectedDockerHost
+        // Ryuk bind-mounts the socket at its conventional path inside the VM, which is
+        // where the daemon exposes it regardless of where the host sees it.
+        task.environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform {
         // Throughput measurement is opt-in: ./gradlew perfTest
@@ -56,6 +88,7 @@ tasks.named('test') {
     }
     // Testcontainers needs a moment on a small Docker VM.
     systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+    configureDockerEnvironment(it)
     finalizedBy tasks.named('jacocoTestReport')
 }
 
@@ -70,6 +103,7 @@ tasks.register('perfTest', Test) {
     testLogging {
         showStandardStreams = true
     }
+    configureDockerEnvironment(it)
     outputs.upToDateWhen { false }
 }
 
