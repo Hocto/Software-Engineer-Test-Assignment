@@ -52,9 +52,7 @@ public class TransactionService {
     @Transactional
     public TransactionResponse createTransaction(Long accountId, CreateTransactionRequest request) {
         // 1. Distinguish "no such account" (404) from "account holds no such currency" (422).
-        if (!accountMapper.existsById(accountId)) {
-            throw new AccountNotFoundException(accountId);
-        }
+        requireAccountExists(accountId);
 
         // 2. Serialize concurrent writers on this exact balance row.
         Balance balance = balanceMapper.findByAccountIdAndCurrencyForUpdate(accountId, request.currency());
@@ -77,33 +75,47 @@ public class TransactionService {
         // 3. Update the balance and append the ledger row inside the same transaction.
         balanceMapper.updateAmount(balance.getId(), newAmount);
 
-        Transaction transaction = new Transaction();
-        transaction.setAccountId(accountId);
-        transaction.setAmount(amount);
-        transaction.setCurrency(request.currency());
-        transaction.setDirection(request.direction());
-        transaction.setDescription(request.description());
-        transaction.setBalanceAfter(newAmount);
+        Transaction transaction = newTransaction(accountId, request, amount, newAmount);
         transactionMapper.insert(transaction);
 
         // 4. Queue events; they leave the process only once this transaction commits.
-        eventPublisher.publishAfterCommit(EventType.TRANSACTION_CREATED, new TransactionCreatedEvent(
-                transaction.getId(), accountId, transaction.getAmount(), transaction.getCurrency(),
-                transaction.getDirection(), transaction.getDescription(), transaction.getBalanceAfter()));
-
-        eventPublisher.publishAfterCommit(EventType.BALANCE_UPDATED, new BalanceUpdatedEvent(
-                balance.getId(), accountId, balance.getCurrency(), previousAmount, newAmount));
+        //    Built after the insert, so both carry the database-generated id.
+        eventPublisher.publishAfterCommit(EventType.TRANSACTION_CREATED,
+                TransactionCreatedEvent.from(transaction));
+        eventPublisher.publishAfterCommit(EventType.BALANCE_UPDATED,
+                BalanceUpdatedEvent.of(balance, previousAmount, newAmount));
 
         return TransactionResponse.from(transaction);
     }
 
     @Transactional(readOnly = true)
     public List<TransactionResponse> getTransactions(Long accountId) {
-        if (!accountMapper.existsById(accountId)) {
-            throw new AccountNotFoundException(accountId);
-        }
+        requireAccountExists(accountId);
         return transactionMapper.findByAccountId(accountId).stream()
                 .map(TransactionResponse::from)
                 .toList();
+    }
+
+    private void requireAccountExists(Long accountId) {
+        if (!accountMapper.existsById(accountId)) {
+            throw new AccountNotFoundException(accountId);
+        }
+    }
+
+    /**
+     * Assembles the ledger row. {@code amount} is the movement, {@code balanceAfter} the
+     * resulting balance — both {@code BigDecimal}, so the named setters below are what keep
+     * the two from being transposed.
+     */
+    private static Transaction newTransaction(Long accountId, CreateTransactionRequest request,
+                                              BigDecimal amount, BigDecimal balanceAfter) {
+        Transaction transaction = new Transaction();
+        transaction.setAccountId(accountId);
+        transaction.setAmount(amount);
+        transaction.setCurrency(request.currency());
+        transaction.setDirection(request.direction());
+        transaction.setDescription(request.description());
+        transaction.setBalanceAfter(balanceAfter);
+        return transaction;
     }
 }

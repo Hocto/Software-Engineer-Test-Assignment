@@ -160,10 +160,18 @@ class TransactionServiceTest {
         ArgumentCaptor<TransactionCreatedEvent> txEvent = ArgumentCaptor.forClass(TransactionCreatedEvent.class);
         verify(eventPublisher).publishAfterCommit(eq(EventType.TRANSACTION_CREATED), txEvent.capture());
         assertThat(txEvent.getValue().transactionId()).isEqualTo(500L);
+        assertThat(txEvent.getValue().accountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(txEvent.getValue().amount()).isEqualByComparingTo("10.00");
+        assertThat(txEvent.getValue().direction()).isEqualTo(Direction.IN);
+        assertThat(txEvent.getValue().description()).isEqualTo("salary");
         assertThat(txEvent.getValue().balanceAfter()).isEqualByComparingTo("110.00");
 
         ArgumentCaptor<BalanceUpdatedEvent> balanceEvent = ArgumentCaptor.forClass(BalanceUpdatedEvent.class);
         verify(eventPublisher).publishAfterCommit(eq(EventType.BALANCE_UPDATED), balanceEvent.capture());
+        // balanceId and accountId are read off the locked row rather than the method
+        // arguments, so they are asserted here to pin where those values come from.
+        assertThat(balanceEvent.getValue().balanceId()).isEqualTo(10L);
+        assertThat(balanceEvent.getValue().accountId()).isEqualTo(ACCOUNT_ID);
         assertThat(balanceEvent.getValue().previousAmount()).isEqualByComparingTo("100.00");
         assertThat(balanceEvent.getValue().availableAmount()).isEqualByComparingTo("110.00");
         assertThat(balanceEvent.getValue().currency()).isEqualTo(Currency.EUR);

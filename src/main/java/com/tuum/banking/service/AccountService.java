@@ -4,10 +4,9 @@ import com.tuum.banking.exception.AccountNotFoundException;
 import com.tuum.banking.messaging.DomainEventPublisher;
 import com.tuum.banking.messaging.event.AccountCreatedEvent;
 import com.tuum.banking.messaging.event.EventType;
-import com.tuum.banking.model.dto.AccountResponse;
-import com.tuum.banking.model.dto.BalanceResponse;
-import com.tuum.banking.model.dto.CreateAccountRequest;
 import com.tuum.banking.model.Money;
+import com.tuum.banking.model.dto.AccountResponse;
+import com.tuum.banking.model.dto.CreateAccountRequest;
 import com.tuum.banking.model.entity.Account;
 import com.tuum.banking.model.entity.Balance;
 import com.tuum.banking.model.enums.Currency;
@@ -16,9 +15,9 @@ import com.tuum.banking.repository.BalanceMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 public class AccountService {
@@ -46,21 +45,20 @@ public class AccountService {
         Account account = new Account(request.customerId(), request.country());
         accountMapper.insert(account);
 
-        Set<Currency> currencies = new LinkedHashSet<>(request.currencies());
-        List<Balance> balances = currencies.stream()
-                .map(currency -> {
-                    Balance balance = new Balance(account.getId(), currency, Money.ZERO);
-                    balanceMapper.insert(balance);
-                    return balance;
-                })
-                .toList();
+        // A plain loop rather than a stream: each step writes to the database, and a map()
+        // that inserts rows as a side effect reads like a pure transformation while not being
+        // one. LinkedHashSet both de-duplicates and preserves the requested order.
+        List<Balance> balances = new ArrayList<>();
+        for (Currency currency : new LinkedHashSet<>(request.currencies())) {
+            Balance balance = new Balance(account.getId(), currency, Money.ZERO);
+            balanceMapper.insert(balance);
+            balances.add(balance);
+        }
 
-        AccountResponse response = AccountResponse.from(account, balances);
-        eventPublisher.publishAfterCommit(EventType.ACCOUNT_CREATED, new AccountCreatedEvent(
-                response.accountId(), response.customerId(), response.country(),
-                balances.stream().map(BalanceResponse::from).toList()));
+        eventPublisher.publishAfterCommit(EventType.ACCOUNT_CREATED,
+                AccountCreatedEvent.from(account, balances));
 
-        return response;
+        return AccountResponse.from(account, balances);
     }
 
     @Transactional(readOnly = true)
